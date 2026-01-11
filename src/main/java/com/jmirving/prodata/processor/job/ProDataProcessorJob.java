@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -70,49 +71,83 @@ public class ProDataProcessorJob {
         Files.createDirectories(playersOutput.getParent());
         Files.createDirectories(teamsOutput.getParent());
 
+        Path allTemp = createTempFile(allOutput.getParent(), "tmp_all_");
+        Path playersTemp = createTempFile(playersOutput.getParent(), "tmp_players_");
+        Path teamsTemp = createTempFile(teamsOutput.getParent(), "tmp_teams_");
+
         long allCount = 0;
         long playerCount = 0;
         long teamCount = 0;
+        long droppedTeamCount = 0;
 
-        try (BufferedWriter allWriter = Files.newBufferedWriter(allOutput);
-             BufferedWriter playersWriter = Files.newBufferedWriter(playersOutput);
-             BufferedWriter teamsWriter = Files.newBufferedWriter(teamsOutput);
-             CSVPrinter allPrinter = new CSVPrinter(allWriter, CSVFormat.DEFAULT.withHeader(headerArray()));
-             CSVPrinter playersPrinter = new CSVPrinter(playersWriter, CSVFormat.DEFAULT.withHeader(headerArray()));
-             CSVPrinter teamsPrinter = new CSVPrinter(teamsWriter, CSVFormat.DEFAULT.withHeader(headerArray()))
-        ) {
-            for (Path inputFile : inputFiles) {
-                logger.info("Processing {}", inputFile);
-                try (BufferedReader reader = Files.newBufferedReader(inputFile)) {
-                    String headerLine = reader.readLine();
-                    HeaderIndex headerIndex = headerValidator.validate(headerLine);
-                    try (CSVParser parser = CSVParser.parse(reader, CSVFormat.DEFAULT)) {
-                        for (CSVRecord record : parser) {
-                            RowOutput rowOutput = buildRow(record, headerIndex);
-                            if (rowOutput == null) {
-                                continue;
-                            }
-                            allPrinter.printRecord(rowOutput.values());
-                            allCount++;
-                            if (rowOutput.isPlayer()) {
-                                playersPrinter.printRecord(rowOutput.values());
-                                playerCount++;
-                            }
-                            if (rowOutput.isTeam()) {
-                                teamsPrinter.printRecord(rowOutput.values());
-                                teamCount++;
+        try {
+            try (BufferedWriter allWriter = Files.newBufferedWriter(allTemp);
+                 BufferedWriter playersWriter = Files.newBufferedWriter(playersTemp);
+                 BufferedWriter teamsWriter = Files.newBufferedWriter(teamsTemp);
+                 CSVPrinter allPrinter = new CSVPrinter(allWriter, CSVFormat.DEFAULT.withHeader(headerArray()));
+                 CSVPrinter playersPrinter = new CSVPrinter(playersWriter, CSVFormat.DEFAULT.withHeader(headerArray()));
+                 CSVPrinter teamsPrinter = new CSVPrinter(teamsWriter, CSVFormat.DEFAULT.withHeader(headerArray()))
+            ) {
+                for (Path inputFile : inputFiles) {
+                    logger.info("Processing {}", inputFile);
+                    long fileAllCount = 0;
+                    long filePlayerCount = 0;
+                    long fileTeamCount = 0;
+                    long fileDroppedTeamCount = 0;
+                    try (BufferedReader reader = Files.newBufferedReader(inputFile)) {
+                        String headerLine = reader.readLine();
+                        HeaderIndex headerIndex = headerValidator.validate(headerLine);
+                        try (CSVParser parser = CSVParser.parse(reader, CSVFormat.DEFAULT)) {
+                            for (CSVRecord record : parser) {
+                                List<String> values = buildValues(record, headerIndex);
+                                RowFlags flags = classifyRow(values);
+                                if (flags.isTeam() && hasMissingPick(values)) {
+                                    fileDroppedTeamCount++;
+                                    droppedTeamCount++;
+                                    continue;
+                                }
+                                allPrinter.printRecord(values);
+                                allCount++;
+                                fileAllCount++;
+                                if (flags.isPlayer()) {
+                                    playersPrinter.printRecord(values);
+                                    playerCount++;
+                                    filePlayerCount++;
+                                }
+                                if (flags.isTeam()) {
+                                    teamsPrinter.printRecord(values);
+                                    teamCount++;
+                                    fileTeamCount++;
+                                }
                             }
                         }
                     }
+                    logger.info(
+                            "Processed {} (all={}, players={}, teams={}, droppedTeamRows={})",
+                            inputFile.getFileName(),
+                            fileAllCount,
+                            filePlayerCount,
+                            fileTeamCount,
+                            fileDroppedTeamCount
+                    );
                 }
             }
+            moveAtomic(allTemp, allOutput);
+            moveAtomic(playersTemp, playersOutput);
+            moveAtomic(teamsTemp, teamsOutput);
+        } catch (Exception e) {
+            deleteIfExists(allTemp);
+            deleteIfExists(playersTemp);
+            deleteIfExists(teamsTemp);
+            throw e;
         }
 
         logger.info(
-                "Pro data processing complete (all={}, players={}, teams={}) -> {}",
+                "Pro data processing complete (all={}, players={}, teams={}, droppedTeamRows={}) -> {}",
                 allCount,
                 playerCount,
                 teamCount,
+                droppedTeamCount,
                 outputDir
         );
     }
@@ -182,21 +217,20 @@ public class ProDataProcessorJob {
         return formatter.format(Instant.now());
     }
 
-    private RowOutput buildRow(CSVRecord record, HeaderIndex headerIndex) {
+    private List<String> buildValues(CSVRecord record, HeaderIndex headerIndex) {
         List<String> values = new ArrayList<>(ProDataColumns.OUTPUT_COLUMNS.size());
         for (String column : ProDataColumns.OUTPUT_COLUMNS) {
             values.add(readValue(record, headerIndex, column));
         }
+        return values;
+    }
 
+    private RowFlags classifyRow(List<String> values) {
         String participantText = values.get(ProDataColumns.OUTPUT_INDEX.get("participantid"));
         OptionalInt participantId = parseInt(participantText);
         boolean isTeam = participantId.isPresent() && (participantId.getAsInt() == 100 || participantId.getAsInt() == 200);
         boolean isPlayer = participantId.isPresent() && participantId.getAsInt() >= 1 && participantId.getAsInt() <= 10;
-
-        if (isTeam && hasMissingPick(values)) {
-            return null;
-        }
-        return new RowOutput(values, isPlayer, isTeam);
+        return new RowFlags(isPlayer, isTeam);
     }
 
     private boolean hasMissingPick(List<String> values) {
@@ -240,6 +274,26 @@ public class ProDataProcessorJob {
         return ProDataColumns.OUTPUT_COLUMNS.toArray(new String[0]);
     }
 
-    private record RowOutput(List<String> values, boolean isPlayer, boolean isTeam) {
+    private Path createTempFile(Path dir, String prefix) throws IOException {
+        return Files.createTempFile(dir, prefix, ".csv");
+    }
+
+    private void moveAtomic(Path source, Path target) throws IOException {
+        try {
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            throw new IOException("Atomic move failed for " + target, e);
+        }
+    }
+
+    private void deleteIfExists(Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException e) {
+            logger.warn("Failed to delete temp file {}", path, e);
+        }
+    }
+
+    private record RowFlags(boolean isPlayer, boolean isTeam) {
     }
 }
