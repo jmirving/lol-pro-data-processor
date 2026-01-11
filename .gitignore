@@ -1,0 +1,11 @@
+.gradle/
+build/
+out/
+bin/
+
+.idea/
+*.iml
+.DS_Store
+
+# Local Beads state
+.beads/
