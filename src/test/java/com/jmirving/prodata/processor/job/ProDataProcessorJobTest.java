@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import com.jmirving.prodata.processor.ProDataColumns;
 import com.jmirving.prodata.processor.config.ProDataProcessorProperties;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProDataProcessorJobTest {
 
@@ -123,6 +125,60 @@ class ProDataProcessorJobTest {
         assertEquals(0, countTempFiles(outputDir.resolve("teams")));
     }
 
+    @Test
+    void supportsLegacyInputsWithoutFirstpickColumn() throws IOException {
+        Path inputDir = tempDir.resolve("input-legacy");
+        Path outputDir = tempDir.resolve("output-legacy");
+        Files.createDirectories(inputDir);
+
+        Path inputFile = inputDir.resolve("2025_LoL_esports_match_data_from_OraclesElixir.csv");
+        Files.writeString(inputFile, buildLegacyInputCsv());
+
+        ProDataProcessorProperties properties = new ProDataProcessorProperties();
+        properties.setInputDir(inputDir.toString());
+        properties.setOutputDir(outputDir.toString());
+        properties.setYears(List.of(2025));
+
+        ProDataProcessorJob job = new ProDataProcessorJob(properties, new CsvHeaderValidator());
+        job.execute();
+
+        Path teamsOutput = firstCsv(outputDir.resolve("teams"));
+        List<String> lines = Files.readAllLines(teamsOutput);
+        String[] headerColumns = lines.get(0).split(",", -1);
+        int firstpickIndex = findColumnIndex(headerColumns, "firstpick");
+        assertTrue(firstpickIndex >= 0);
+
+        String[] rowColumns = lines.get(1).split(",", -1);
+        assertEquals("", rowColumns[firstpickIndex]);
+    }
+
+    @Test
+    void preservesFirstpickColumnWhenPresent() throws IOException {
+        Path inputDir = tempDir.resolve("input-firstpick");
+        Path outputDir = tempDir.resolve("output-firstpick");
+        Files.createDirectories(inputDir);
+
+        Path inputFile = inputDir.resolve("2025_LoL_esports_match_data_from_OraclesElixir.csv");
+        Files.writeString(inputFile, buildInputCsvWithFirstpick("Red"));
+
+        ProDataProcessorProperties properties = new ProDataProcessorProperties();
+        properties.setInputDir(inputDir.toString());
+        properties.setOutputDir(outputDir.toString());
+        properties.setYears(List.of(2025));
+
+        ProDataProcessorJob job = new ProDataProcessorJob(properties, new CsvHeaderValidator());
+        job.execute();
+
+        Path teamsOutput = firstCsv(outputDir.resolve("teams"));
+        List<String> lines = Files.readAllLines(teamsOutput);
+        String[] headerColumns = lines.get(0).split(",", -1);
+        int firstpickIndex = findColumnIndex(headerColumns, "firstpick");
+        assertTrue(firstpickIndex >= 0);
+
+        String[] rowColumns = lines.get(1).split(",", -1);
+        assertEquals("Red", rowColumns[firstpickIndex]);
+    }
+
     private Path firstCsv(Path dir) throws IOException {
         try (var stream = Files.list(dir)) {
             return stream.filter(path -> path.getFileName().toString().endsWith(".csv"))
@@ -202,6 +258,108 @@ class ProDataProcessorJobTest {
         return String.join(System.lineSeparator(), header, teamMissingPick, teamComplete, playerRow);
     }
 
+    private String buildLegacyInputCsv() {
+        String header = ProDataColumns.OUTPUT_COLUMNS.stream()
+                .filter(column -> !"firstpick".equals(column))
+                .collect(Collectors.joining(","));
+        String teamComplete = String.join(",",
+                "2",
+                "LCS",
+                "Spring",
+                "2025",
+                "2025-01-01 10:00:00",
+                "1",
+                "13.1",
+                "200",
+                "Red",
+                "20",
+                "BAN1",
+                "BAN2",
+                "BAN3",
+                "BAN4",
+                "BAN5",
+                "PICK1",
+                "PICK2",
+                "PICK3",
+                "PICK4",
+                "PICK5"
+        );
+        String playerRow = String.join(",",
+                "3",
+                "LCS",
+                "Spring",
+                "2025",
+                "2025-01-01 10:00:00",
+                "1",
+                "13.1",
+                "1",
+                "Blue",
+                "10",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                ""
+        );
+        return String.join(System.lineSeparator(), header, teamComplete, playerRow);
+    }
+
+    private String buildInputCsvWithFirstpick(String firstpickValue) {
+        String header = String.join(",", ProDataColumns.OUTPUT_COLUMNS);
+        String teamComplete = String.join(",",
+                "2",
+                "LCS",
+                "Spring",
+                "2025",
+                "2025-01-01 10:00:00",
+                "1",
+                "13.1",
+                "200",
+                "Red",
+                "20",
+                "BAN1",
+                "BAN2",
+                "BAN3",
+                "BAN4",
+                "BAN5",
+                "PICK1",
+                "PICK2",
+                "PICK3",
+                "PICK4",
+                "PICK5",
+                firstpickValue
+        );
+        String playerRow = String.join(",",
+                "3",
+                "LCS",
+                "Spring",
+                "2025",
+                "2025-01-01 10:00:00",
+                "1",
+                "13.1",
+                "1",
+                "Blue",
+                "10",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                firstpickValue
+        );
+        return String.join(System.lineSeparator(), header, teamComplete, playerRow);
+    }
+
     private String buildInputCsvWithCompleteTeamAndPlayer(String gameIdSeed) {
         String header = String.join(",", ProDataColumns.OUTPUT_COLUMNS);
         String teamComplete = String.join(",",
@@ -255,5 +413,14 @@ class ProDataProcessorJobTest {
         try (var stream = Files.list(dir)) {
             return stream.filter(path -> path.getFileName().toString().startsWith("tmp_")).count();
         }
+    }
+
+    private int findColumnIndex(String[] headerColumns, String columnName) {
+        for (int index = 0; index < headerColumns.length; index++) {
+            if (columnName.equals(headerColumns[index])) {
+                return index;
+            }
+        }
+        return -1;
     }
 }

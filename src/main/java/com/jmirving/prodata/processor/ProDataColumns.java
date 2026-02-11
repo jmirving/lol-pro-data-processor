@@ -27,9 +27,31 @@ public final class ProDataColumns {
             "pick2",
             "pick3",
             "pick4",
+            "pick5",
+            "firstpick"
+    );
+    public static final Set<String> REQUIRED_COLUMNS = Set.of(
+            "gameid",
+            "league",
+            "split",
+            "year",
+            "date",
+            "game",
+            "patch",
+            "participantid",
+            "side",
+            "teamid",
+            "ban1",
+            "ban2",
+            "ban3",
+            "ban4",
+            "ban5",
+            "pick1",
+            "pick2",
+            "pick3",
+            "pick4",
             "pick5"
     );
-    public static final Set<String> REQUIRED_COLUMNS = Set.copyOf(OUTPUT_COLUMNS);
     public static final List<String> PICK_COLUMNS = List.of("pick1", "pick2", "pick3", "pick4", "pick5");
     public static final Map<String, Integer> OUTPUT_INDEX = buildOutputIndex();
 

@@ -35,4 +35,13 @@ class CsvHeaderValidatorTest {
 
         assertDoesNotThrow(() -> validator.validate(header));
     }
+
+    @Test
+    void acceptsOptionalFirstpickColumnWhenPresent() throws IOException {
+        CsvHeaderValidator validator = new CsvHeaderValidator();
+        String header = "gameid,league,split,year,date,game,patch,participantid,side,teamid," +
+                "ban1,ban2,ban3,ban4,ban5,pick1,pick2,pick3,pick4,pick5,firstpick";
+
+        assertDoesNotThrow(() -> validator.validate(header));
+    }
 }
