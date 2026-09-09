@@ -18,7 +18,10 @@ public class ProDataProcessorRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        WorkerResultWriter resultWriter = new WorkerResultWriter(new ObjectMapper(), System.out);
+        WorkerResultWriter resultWriter = new WorkerResultWriter(
+                new ObjectMapper(),
+                StructuredOutputStreams.resultStream()
+        );
         try {
             WorkerArguments.apply(args, properties);
             boolean structured = structuredOutputEnabled();

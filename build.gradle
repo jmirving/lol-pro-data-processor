@@ -21,6 +21,8 @@ dependencies {
 
 test {
     useJUnitPlatform()
+    dependsOn bootJar
+    systemProperty 'workerJar', bootJar.archiveFile.get().asFile.absolutePath
 }
 
 jacocoTestReport {

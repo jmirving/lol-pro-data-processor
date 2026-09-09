@@ -85,7 +85,9 @@ The default stream/exit-code contract is:
 - exit non-zero on configuration, validation, or processing failure
 - operational logs are written to stderr
 
-With `--structured-output=json`, stdout contains one JSON object. Successful
+With `--structured-output=json`, the entire stdout stream contains exactly one
+JSON object (plus its terminating newline). The Spring banner and operational
+logs are kept off stdout; operational logs continue on stderr. Successful
 metadata includes the artifact ID, resolved input files, output paths, row
 counts, and dropped incomplete-team-row count:
 
