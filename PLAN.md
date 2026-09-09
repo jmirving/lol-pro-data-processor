@@ -1,75 +1,41 @@
 # lol-pro-data-processor Implementation Plan
 
-Goal: consume raw Oracle's Elixir CSV handoff artifacts (per-year files) and
-publish normalized `all`, `players`, and `teams` CSVs with the DraftSage
-minimal schema defined in `project-brain/DECISIONS.md`.
+Goal: consume raw Oracle's Elixir CSV handoff artifacts and publish normalized `all`, `players`, and `teams` CSVs using the repository's current documented/tested schema, while also serving as the canonical normalization layer for future draft artifacts.
 
 ## Assumptions
-- The download cron publishes raw Oracle's Elixir CSVs per year and does not
-  alter columns.
-- Extra columns may appear in the input; they are ignored (compatibility rule).
-- Team rows are `participantid` 100/200; team rows must have pick1-5 populated.
-- Processor writes versioned outputs in a single run directory with a run ID.
-- Keep KISS/YAGNI; avoid new abstractions unless tests demand them.
+- The download cron publishes raw Oracle's Elixir CSVs per year and does not alter columns.
+- Extra columns may appear in the input and are ignored where allowed by the current schema contract.
+- Team rows are `participantid` 100/200; existing validation/filter behavior is defined by repository tests.
+- Caller-provided artifact IDs may be used for deterministic output naming.
+- Keep KISS/YAGNI; avoid new abstractions unless tests or current GitHub issues require them.
 
-## Plan (no implementation until approved)
+## Implemented baseline
 
-1. Confirm contract + configuration surface
-   - Define config keys for input dir, output dir, and explicit years list.
-   - If years are omitted, discover `*_LoL_esports_match_data_from_OraclesElixir.csv`.
-   - Document defaults and expected paths in README (or `CONFIG.md`).
-   - Validation: config matches `project-brain/DECISIONS.md`.
-   - Status: implemented (config + README + discovery).
+1. Configuration and input discovery
+   - Supports caller-owned input/output directories and optional explicit years.
+   - Discovers expected Oracle's Elixir year files when years are omitted.
 
-2. Input discovery + header validation (TDD)
-   - For each selected year file, read and validate required columns.
-   - Accept empty CSVs if header is present.
-   - Validation: unit tests cover missing headers and missing required columns.
-   - Status: implemented (header validator + tests).
+2. Input validation
+   - Validates required headers and supports empty CSVs with valid headers.
 
-3. Normalize rows + split outputs (TDD)
-   - Emit every row to `all`.
-   - Emit `participantid` 100/200 rows to `teams`; everything else to `players`.
-   - Drop team rows with missing picks (pick1-5) as specified by the contract.
-   - Output column order matches the DraftSage schema exactly.
-   - Validation: unit tests for team row filtering and output order.
-   - Status: implemented (job + tests).
+3. Normalization and output splitting
+   - Produces `all`, `players`, and `teams` outputs according to the repository's current schema/tests.
 
-4. Multi-year merge behavior (TDD)
-   - Combine rows across all selected year files into a single set of outputs.
-   - If a configured year file is missing, fail fast with a clear error.
-   - Validation: test multi-year merge and missing-file failure behavior.
-   - Status: implemented (logic + tests).
+4. Multi-year merge behavior
+   - Combines selected yearly inputs and fails clearly when required configured inputs are absent.
 
-5. Output writer + atomic publish (TDD)
-   - Write each dataset to a temp file, then atomically move into place.
-   - Ensure output layout:
-     - `all/all_<runId>.csv`
-     - `players/players_<runId>.csv`
-     - `teams/teams_<runId>.csv`
-   - Validation: integration test verifies atomic write and final layout.
-   - Status: implemented (atomic publish + temp file cleanup test).
+5. Atomic output publication
+   - Writes temp files and safely replaces final artifacts.
 
-6. Observability + exit codes
-   - Log per-file row counts and drop counts.
-   - Non-zero exit on validation or IO failure.
-   - Validation: tests cover error paths where feasible.
-   - Status: implemented; executable failure path verified with non-zero exit and
-     a structured failure envelope.
+6. Observability and exit codes
+   - Reports processing counts and returns non-zero on validation or processing failures.
 
-7. Documentation + usage examples
-   - Update README with run instructions, config keys, and output layout.
-   - Document the dependency on the download-cron handoff contract.
-   - Validation: docs reflect current behavior and contract constraints.
-   - Status: implemented (README).
+7. External command-adapter compatibility
+   - Accepts standalone CLI aliases for caller-owned input/output paths.
+   - Supports caller-selected deterministic artifact IDs.
+   - Optionally emits the generic JSON result envelope on stdout.
+   - Preserves direct standalone execution and keeps scheduling outside this repo.
 
-8. External command adapter compatibility
-   - Accept standalone CLI aliases for caller-owned input/output paths.
-   - Support caller-selected deterministic artifact IDs with safe replacement.
-   - Optionally emit one generic JSON result envelope on stdout while keeping
-     operational logs on stderr.
-   - Preserve direct standalone execution and keep scheduling outside this repo.
-   - Status: implemented and verified against the command adapter contract.
-
-## Notes
-- Implementation will not begin until this plan is approved.
+## Current forward work
+- DataGraph-facing one-row-per-game canonical draft artifact is tracked in GitHub issue #2.
+- Repository-local docs, tests, code, and GitHub issues are the source of truth for schema and behavior changes.
