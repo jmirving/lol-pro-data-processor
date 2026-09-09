@@ -126,6 +126,57 @@ class ProDataProcessorJobTest {
     }
 
     @Test
+    void usesDeterministicArtifactIdAndSafelyReplacesOutputs() throws IOException {
+        Path inputDir = tempDir.resolve("input-deterministic");
+        Path outputDir = tempDir.resolve("output-deterministic");
+        Files.createDirectories(inputDir);
+        Files.writeString(
+                inputDir.resolve("2025_LoL_esports_match_data_from_OraclesElixir.csv"),
+                buildInputCsvWithCompleteTeamAndPlayer("50")
+        );
+
+        ProDataProcessorProperties properties = new ProDataProcessorProperties();
+        properties.setInputDir(inputDir.toString());
+        properties.setOutputDir(outputDir.toString());
+        properties.setYears(List.of(2025));
+        properties.setArtifactId("refresh-2025");
+
+        ProDataProcessorJob job = new ProDataProcessorJob(properties, new CsvHeaderValidator());
+        ProDataProcessingResult first = job.execute();
+        ProDataProcessingResult second = job.execute();
+
+        assertEquals("refresh-2025", first.artifactId());
+        assertEquals(first.outputs(), second.outputs());
+        assertEquals(outputDir.resolve("all/all_refresh-2025.csv").toAbsolutePath(), first.outputs().get("all"));
+        assertEquals(2, first.rowCounts().get("all"));
+        assertEquals(1, first.rowCounts().get("players"));
+        assertEquals(1, first.rowCounts().get("teams"));
+        assertEquals(1, countCsvFiles(outputDir.resolve("all")));
+        assertEquals(1, countCsvFiles(outputDir.resolve("players")));
+        assertEquals(1, countCsvFiles(outputDir.resolve("teams")));
+    }
+
+    @Test
+    void rejectsUnsafeArtifactId() throws IOException {
+        Path inputDir = tempDir.resolve("input-unsafe-id");
+        Files.createDirectories(inputDir);
+        Files.writeString(
+                inputDir.resolve("2025_LoL_esports_match_data_from_OraclesElixir.csv"),
+                buildInputCsvWithCompleteTeamAndPlayer("60")
+        );
+
+        ProDataProcessorProperties properties = new ProDataProcessorProperties();
+        properties.setInputDir(inputDir.toString());
+        properties.setOutputDir(tempDir.resolve("output-unsafe-id").toString());
+        properties.setYears(List.of(2025));
+        properties.setArtifactId("../escape");
+
+        ProDataProcessorJob job = new ProDataProcessorJob(properties, new CsvHeaderValidator());
+
+        assertThrows(IllegalArgumentException.class, job::execute);
+    }
+
+    @Test
     void supportsLegacyInputsWithoutFirstpickColumn() throws IOException {
         Path inputDir = tempDir.resolve("input-legacy");
         Path outputDir = tempDir.resolve("output-legacy");
@@ -412,6 +463,12 @@ class ProDataProcessorJobTest {
     private long countTempFiles(Path dir) throws IOException {
         try (var stream = Files.list(dir)) {
             return stream.filter(path -> path.getFileName().toString().startsWith("tmp_")).count();
+        }
+    }
+
+    private long countCsvFiles(Path dir) throws IOException {
+        try (var stream = Files.list(dir)) {
+            return stream.filter(path -> path.getFileName().toString().endsWith(".csv")).count();
         }
     }
 

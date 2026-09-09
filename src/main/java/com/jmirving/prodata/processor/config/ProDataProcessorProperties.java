@@ -10,6 +10,8 @@ public class ProDataProcessorProperties {
     private String inputDir = "build/prodata";
     private String outputDir = "build/prodata-processed";
     private List<Integer> years = new ArrayList<>();
+    private String artifactId;
+    private String structuredOutput;
 
     public String getInputDir() {
         return inputDir;
@@ -33,5 +35,21 @@ public class ProDataProcessorProperties {
 
     public void setYears(List<Integer> years) {
         this.years = years;
+    }
+
+    public String getArtifactId() {
+        return artifactId;
+    }
+
+    public void setArtifactId(String artifactId) {
+        this.artifactId = artifactId;
+    }
+
+    public String getStructuredOutput() {
+        return structuredOutput;
+    }
+
+    public void setStructuredOutput(String structuredOutput) {
+        this.structuredOutput = structuredOutput;
     }
 }

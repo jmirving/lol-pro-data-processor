@@ -11,9 +11,12 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.OptionalInt;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -35,6 +38,7 @@ public class ProDataProcessorJob {
     private static final Logger logger = LoggerFactory.getLogger(ProDataProcessorJob.class);
     private static final Pattern FILE_PATTERN =
             Pattern.compile("(?<year>\\d{4})_LoL_esports_match_data_from_OraclesElixir\\.csv");
+    private static final Pattern ARTIFACT_ID_PATTERN = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,127}");
 
     private final ProDataProcessorProperties properties;
     private final CsvHeaderValidator headerValidator;
@@ -47,25 +51,24 @@ public class ProDataProcessorJob {
         this.headerValidator = headerValidator;
     }
 
-    public int run() {
+    public ProDataProcessingResult run() {
         try {
-            execute();
-            return 0;
+            return execute();
         } catch (Exception e) {
             logger.error("Pro data processing failed", e);
-            return 1;
+            throw new IllegalStateException("Pro data processing failed: " + errorMessage(e), e);
         }
     }
 
-    void execute() throws IOException {
+    ProDataProcessingResult execute() throws IOException {
         Path inputDir = resolveInputDir();
         Path outputDir = resolveOutputDir();
         List<Path> inputFiles = resolveInputFiles(inputDir);
-        String runId = runId();
+        String artifactId = artifactId();
 
-        Path allOutput = outputDir.resolve("all").resolve("all_" + runId + ".csv");
-        Path playersOutput = outputDir.resolve("players").resolve("players_" + runId + ".csv");
-        Path teamsOutput = outputDir.resolve("teams").resolve("teams_" + runId + ".csv");
+        Path allOutput = outputDir.resolve("all").resolve("all_" + artifactId + ".csv");
+        Path playersOutput = outputDir.resolve("players").resolve("players_" + artifactId + ".csv");
+        Path teamsOutput = outputDir.resolve("teams").resolve("teams_" + artifactId + ".csv");
 
         Files.createDirectories(allOutput.getParent());
         Files.createDirectories(playersOutput.getParent());
@@ -150,6 +153,22 @@ public class ProDataProcessorJob {
                 droppedTeamCount,
                 outputDir
         );
+
+        Map<String, Path> outputs = new LinkedHashMap<>();
+        outputs.put("all", allOutput);
+        outputs.put("players", playersOutput);
+        outputs.put("teams", teamsOutput);
+        Map<String, Long> rowCounts = new LinkedHashMap<>();
+        rowCounts.put("all", allCount);
+        rowCounts.put("players", playerCount);
+        rowCounts.put("teams", teamCount);
+        return new ProDataProcessingResult(
+                artifactId,
+                List.copyOf(inputFiles),
+                Collections.unmodifiableMap(outputs),
+                Collections.unmodifiableMap(rowCounts),
+                droppedTeamCount
+        );
     }
 
     private Path resolveInputDir() {
@@ -212,9 +231,24 @@ public class ProDataProcessorJob {
         return Integer.MAX_VALUE;
     }
 
-    private String runId() {
+    private String artifactId() {
+        String configured = properties.getArtifactId();
+        if (configured != null && !configured.isBlank()) {
+            if (!ARTIFACT_ID_PATTERN.matcher(configured).matches()) {
+                throw new IllegalArgumentException(
+                        "artifact-id must start with an alphanumeric character and contain only " +
+                                "alphanumeric characters, '.', '_', or '-' (maximum 128 characters)"
+                );
+            }
+            return configured;
+        }
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").withZone(ZoneOffset.UTC);
         return formatter.format(Instant.now());
+    }
+
+    private String errorMessage(Exception exception) {
+        String message = exception.getMessage();
+        return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
     }
 
     private List<String> buildValues(CSVRecord record, HeaderIndex headerIndex) {

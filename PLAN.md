@@ -54,13 +54,22 @@ minimal schema defined in `project-brain/DECISIONS.md`.
    - Log per-file row counts and drop counts.
    - Non-zero exit on validation or IO failure.
    - Validation: tests cover error paths where feasible.
-   - Status: per-file logging implemented; error-path tests still missing.
+   - Status: implemented; executable failure path verified with non-zero exit and
+     a structured failure envelope.
 
 7. Documentation + usage examples
    - Update README with run instructions, config keys, and output layout.
    - Document the dependency on the download-cron handoff contract.
    - Validation: docs reflect current behavior and contract constraints.
    - Status: implemented (README).
+
+8. External command adapter compatibility
+   - Accept standalone CLI aliases for caller-owned input/output paths.
+   - Support caller-selected deterministic artifact IDs with safe replacement.
+   - Optionally emit one generic JSON result envelope on stdout while keeping
+     operational logs on stderr.
+   - Preserve direct standalone execution and keep scheduling outside this repo.
+   - Status: implemented and verified against the command adapter contract.
 
 ## Notes
 - Implementation will not begin until this plan is approved.
