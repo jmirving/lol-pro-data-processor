@@ -1,3 +1,4 @@
 gameid,league,split,year,date,game,patch,participantid,side,teamid,ban1,ban2,ban3,ban4,ban5,pick1,pick2,pick3,pick4,pick5,firstpick
 contract-check,LCK,Summer,2025,2025-07-01,1,15.13,1,Blue,blue-team,,,,,,,,,,,Blue
 contract-check,LCK,Summer,2025,2025-07-01,1,15.13,100,Blue,blue-team,Aatrox,Ahri,Akali,Alistar,Ambessa,Annie,Aphelios,Ashe,Aurora,Azir,Blue
+contract-check,LCK,Summer,2025,2025-07-01,1,15.13,200,Red,red-team,Brand,Braum,Caitlyn,Camille,Cassiopeia,Corki,Darius,Diana,Draven,Ekko,Blue

@@ -8,6 +8,7 @@ import java.util.Map;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jmirving.prodata.processor.ProDataColumns;
 
 final class WorkerResultWriter {
     private final ObjectMapper objectMapper;
@@ -21,10 +22,12 @@ final class WorkerResultWriter {
     void writeSuccess(ProDataProcessingResult result) {
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("artifactId", result.artifactId());
+        metadata.put("schemaVersions", Map.of("drafts", ProDataColumns.DRAFT_SCHEMA_VERSION));
         metadata.put("inputFiles", stringifyPaths(result.inputFiles()));
         metadata.put("outputs", stringifyPaths(result.outputs()));
         metadata.put("rowCounts", result.rowCounts());
         metadata.put("droppedTeamRows", result.droppedTeamRows());
+        metadata.put("droppedDraftGames", result.droppedDraftGames());
 
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("status", "SUCCESS");

@@ -25,8 +25,9 @@ class WorkerResultWriterTest {
                 "run-42",
                 List.of(Path.of("/tmp/raw/2025.csv")),
                 Map.of("all", Path.of("/tmp/out/all/all_run-42.csv")),
-                Map.of("all", 12L, "players", 10L, "teams", 2L),
-                1L
+                Map.of("all", 12L, "players", 10L, "teams", 2L, "drafts", 1L),
+                1L,
+                2L
         );
 
         writer.writeSuccess(result);
@@ -35,8 +36,10 @@ class WorkerResultWriterTest {
         assertEquals("SUCCESS", envelope.get("status").asText());
         assertFalse(envelope.has("reasonCode"));
         assertEquals("run-42", envelope.at("/metadata/artifactId").asText());
+        assertEquals("1", envelope.at("/metadata/schemaVersions/drafts").asText());
         assertEquals(12, envelope.at("/metadata/rowCounts/all").asLong());
         assertEquals("/tmp/out/all/all_run-42.csv", envelope.at("/metadata/outputs/all").asText());
+        assertEquals(2, envelope.at("/metadata/droppedDraftGames").asLong());
     }
 
     @Test

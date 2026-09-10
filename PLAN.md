@@ -1,6 +1,6 @@
 # lol-pro-data-processor Implementation Plan
 
-Goal: consume raw Oracle's Elixir CSV handoff artifacts and publish normalized `all`, `players`, and `teams` CSVs using the repository's current documented/tested schema, while also serving as the canonical normalization layer for future draft artifacts.
+Goal: consume raw Oracle's Elixir CSV handoff artifacts and publish normalized `all`, `players`, `teams`, and canonical one-row-per-game `drafts` CSVs using the repository's current documented/tested schemas.
 
 ## Assumptions
 - The download cron publishes raw Oracle's Elixir CSVs per year and does not alter columns.
@@ -36,6 +36,13 @@ Goal: consume raw Oracle's Elixir CSV handoff artifacts and publish normalized `
    - Optionally emits the generic JSON result envelope on stdout.
    - Preserves direct standalone execution and keeps scheduling outside this repo.
 
+8. Canonical draft artifact
+   - Publishes the schema-versioned `drafts/drafts_<artifactId>.csv` contract.
+   - Flattens complete Blue/Red team pairs into one deterministic row per game.
+   - Excludes and reports incomplete or malformed draft games without changing
+     the legacy output contracts.
+
 ## Current forward work
-- DataGraph-facing one-row-per-game canonical draft artifact is tracked in GitHub issue #2.
+
 - Repository-local docs, tests, code, and GitHub issues are the source of truth for schema and behavior changes.
+- Consumer migration to the canonical draft artifact remains separately scoped.

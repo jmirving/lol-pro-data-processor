@@ -69,27 +69,38 @@ public class ProDataProcessorJob {
         Path allOutput = outputDir.resolve("all").resolve("all_" + artifactId + ".csv");
         Path playersOutput = outputDir.resolve("players").resolve("players_" + artifactId + ".csv");
         Path teamsOutput = outputDir.resolve("teams").resolve("teams_" + artifactId + ".csv");
+        Path draftsOutput = outputDir.resolve("drafts").resolve("drafts_" + artifactId + ".csv");
 
         Files.createDirectories(allOutput.getParent());
         Files.createDirectories(playersOutput.getParent());
         Files.createDirectories(teamsOutput.getParent());
+        Files.createDirectories(draftsOutput.getParent());
 
         Path allTemp = createTempFile(allOutput.getParent(), "tmp_all_");
         Path playersTemp = createTempFile(playersOutput.getParent(), "tmp_players_");
         Path teamsTemp = createTempFile(teamsOutput.getParent(), "tmp_teams_");
+        Path draftsTemp = createTempFile(draftsOutput.getParent(), "tmp_drafts_");
 
         long allCount = 0;
         long playerCount = 0;
         long teamCount = 0;
         long droppedTeamCount = 0;
+        long draftCount;
+        long droppedDraftGameCount;
+        DraftGameCollector draftCollector = new DraftGameCollector();
 
         try {
             try (BufferedWriter allWriter = Files.newBufferedWriter(allTemp);
                  BufferedWriter playersWriter = Files.newBufferedWriter(playersTemp);
                  BufferedWriter teamsWriter = Files.newBufferedWriter(teamsTemp);
+                 BufferedWriter draftsWriter = Files.newBufferedWriter(draftsTemp);
                  CSVPrinter allPrinter = new CSVPrinter(allWriter, CSVFormat.DEFAULT.withHeader(headerArray()));
                  CSVPrinter playersPrinter = new CSVPrinter(playersWriter, CSVFormat.DEFAULT.withHeader(headerArray()));
-                 CSVPrinter teamsPrinter = new CSVPrinter(teamsWriter, CSVFormat.DEFAULT.withHeader(headerArray()))
+                 CSVPrinter teamsPrinter = new CSVPrinter(teamsWriter, CSVFormat.DEFAULT.withHeader(headerArray()));
+                 CSVPrinter draftsPrinter = new CSVPrinter(
+                         draftsWriter,
+                         CSVFormat.DEFAULT.withHeader(ProDataColumns.DRAFT_COLUMNS.toArray(new String[0]))
+                 )
             ) {
                 for (Path inputFile : inputFiles) {
                     logger.info("Processing {}", inputFile);
@@ -104,6 +115,7 @@ public class ProDataProcessorJob {
                             for (CSVRecord record : parser) {
                                 List<String> values = buildValues(record, headerIndex);
                                 RowFlags flags = classifyRow(values);
+                                draftCollector.observe(values, flags.isTeam());
                                 if (flags.isTeam() && hasMissingPick(values)) {
                                     fileDroppedTeamCount++;
                                     droppedTeamCount++;
@@ -134,23 +146,34 @@ public class ProDataProcessorJob {
                             fileDroppedTeamCount
                     );
                 }
+                DraftGameCollector.Result drafts = draftCollector.finish();
+                for (List<String> draft : drafts.rows()) {
+                    draftsPrinter.printRecord(draft);
+                }
+                draftCount = drafts.rows().size();
+                droppedDraftGameCount = drafts.droppedGames();
             }
             moveAtomic(allTemp, allOutput);
             moveAtomic(playersTemp, playersOutput);
             moveAtomic(teamsTemp, teamsOutput);
+            moveAtomic(draftsTemp, draftsOutput);
         } catch (Exception e) {
             deleteIfExists(allTemp);
             deleteIfExists(playersTemp);
             deleteIfExists(teamsTemp);
+            deleteIfExists(draftsTemp);
             throw e;
         }
 
         logger.info(
-                "Pro data processing complete (all={}, players={}, teams={}, droppedTeamRows={}) -> {}",
+                "Pro data processing complete (all={}, players={}, teams={}, drafts={}, " +
+                        "droppedTeamRows={}, droppedDraftGames={}) -> {}",
                 allCount,
                 playerCount,
                 teamCount,
+                draftCount,
                 droppedTeamCount,
+                droppedDraftGameCount,
                 outputDir
         );
 
@@ -158,16 +181,19 @@ public class ProDataProcessorJob {
         outputs.put("all", allOutput);
         outputs.put("players", playersOutput);
         outputs.put("teams", teamsOutput);
+        outputs.put("drafts", draftsOutput);
         Map<String, Long> rowCounts = new LinkedHashMap<>();
         rowCounts.put("all", allCount);
         rowCounts.put("players", playerCount);
         rowCounts.put("teams", teamCount);
+        rowCounts.put("drafts", draftCount);
         return new ProDataProcessingResult(
                 artifactId,
                 List.copyOf(inputFiles),
                 Collections.unmodifiableMap(outputs),
                 Collections.unmodifiableMap(rowCounts),
-                droppedTeamCount
+                droppedTeamCount,
+                droppedDraftGameCount
         );
     }
 

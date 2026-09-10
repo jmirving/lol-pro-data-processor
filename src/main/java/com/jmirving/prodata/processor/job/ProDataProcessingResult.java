@@ -9,6 +9,7 @@ public record ProDataProcessingResult(
         List<Path> inputFiles,
         Map<String, Path> outputs,
         Map<String, Long> rowCounts,
-        long droppedTeamRows
+        long droppedTeamRows,
+        long droppedDraftGames
 ) {
 }

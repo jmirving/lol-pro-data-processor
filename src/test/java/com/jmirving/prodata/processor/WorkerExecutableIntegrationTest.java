@@ -49,15 +49,24 @@ class WorkerExecutableIntegrationTest {
         JsonNode envelope = strictObjectMapper.readTree(process.stdout());
         assertEquals("SUCCESS", envelope.path("status").asText());
         assertEquals("integration-success", envelope.at("/metadata/artifactId").asText());
-        assertEquals(2, envelope.at("/metadata/rowCounts/all").asLong());
+        assertEquals("1", envelope.at("/metadata/schemaVersions/drafts").asText());
+        assertEquals(3, envelope.at("/metadata/rowCounts/all").asLong());
         assertEquals(1, envelope.at("/metadata/rowCounts/players").asLong());
-        assertEquals(1, envelope.at("/metadata/rowCounts/teams").asLong());
+        assertEquals(2, envelope.at("/metadata/rowCounts/teams").asLong());
+        assertEquals(1, envelope.at("/metadata/rowCounts/drafts").asLong());
         assertEquals(0, envelope.at("/metadata/droppedTeamRows").asLong());
+        assertEquals(0, envelope.at("/metadata/droppedDraftGames").asLong());
         assertTrue(envelope.at("/metadata/inputFiles/0").asText().endsWith(INPUT_FILE_NAME));
         assertFalse(process.stdout().contains("Spring"));
         assertFalse(process.stdout().contains("Processing"));
         assertTrue(process.stderr().contains("Processing"), process.stderr());
         assertTrue(Files.isRegularFile(outputDir.resolve("all/all_integration-success.csv")));
+        Path draftsOutput = outputDir.resolve("drafts/drafts_integration-success.csv");
+        assertTrue(Files.isRegularFile(draftsOutput));
+        List<String> draftLines = Files.readAllLines(draftsOutput);
+        assertEquals(String.join(",", ProDataColumns.DRAFT_COLUMNS), draftLines.get(0));
+        assertEquals(2, draftLines.size());
+        assertTrue(draftLines.get(1).startsWith("1,contract-check,2025-07-01,2025,Summer,LCK,15.13,1,"));
     }
 
     @Test
@@ -99,6 +108,7 @@ class WorkerExecutableIntegrationTest {
         assertTrue(Files.isRegularFile(outputDir.resolve("all/all_plain-success.csv")));
         assertTrue(Files.isRegularFile(outputDir.resolve("players/players_plain-success.csv")));
         assertTrue(Files.isRegularFile(outputDir.resolve("teams/teams_plain-success.csv")));
+        assertTrue(Files.isRegularFile(outputDir.resolve("drafts/drafts_plain-success.csv")));
     }
 
     private Path prepareInput(String name) throws IOException {

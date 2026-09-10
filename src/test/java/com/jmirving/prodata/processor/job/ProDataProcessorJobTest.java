@@ -123,6 +123,7 @@ class ProDataProcessorJobTest {
         assertEquals(0, countTempFiles(outputDir.resolve("all")));
         assertEquals(0, countTempFiles(outputDir.resolve("players")));
         assertEquals(0, countTempFiles(outputDir.resolve("teams")));
+        assertEquals(0, countTempFiles(outputDir.resolve("drafts")));
     }
 
     @Test
@@ -148,12 +149,14 @@ class ProDataProcessorJobTest {
         assertEquals("refresh-2025", first.artifactId());
         assertEquals(first.outputs(), second.outputs());
         assertEquals(outputDir.resolve("all/all_refresh-2025.csv").toAbsolutePath(), first.outputs().get("all"));
+        assertEquals(outputDir.resolve("drafts/drafts_refresh-2025.csv").toAbsolutePath(), first.outputs().get("drafts"));
         assertEquals(2, first.rowCounts().get("all"));
         assertEquals(1, first.rowCounts().get("players"));
         assertEquals(1, first.rowCounts().get("teams"));
         assertEquals(1, countCsvFiles(outputDir.resolve("all")));
         assertEquals(1, countCsvFiles(outputDir.resolve("players")));
         assertEquals(1, countCsvFiles(outputDir.resolve("teams")));
+        assertEquals(1, countCsvFiles(outputDir.resolve("drafts")));
     }
 
     @Test
